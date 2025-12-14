@@ -108,13 +108,48 @@ export function ProgressTracker({
       const tick = async () => {
         try {
           const res = await fetch(url, { cache: 'no-store' });
+          
+          if (!res.ok) {
+            let errorMessage = `HTTP ${res.status}`;
+            try {
+              const contentType = res.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const json = await res.json();
+                errorMessage = json?.error || json?.details || errorMessage;
+              } else {
+                const text = await res.text();
+                errorMessage = `HTTP ${res.status}: ${text}`;
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse error response:', parseError);
+            }
+            pushLog({
+              at: nowIso(),
+              level: 'error',
+              message: `Status check failed: ${errorMessage}`,
+            });
+            return;
+          }
+
+          // Check Content-Type before parsing
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            pushLog({
+              at: nowIso(),
+              level: 'error',
+              message: 'Invalid response format from server',
+            });
+            return;
+          }
+
           const json = (await res.json()) as JobStatusResponse;
           applyStatus(json);
         } catch (err) {
+          console.error('Polling error:', err);
           pushLog({
             at: nowIso(),
             level: 'error',
-            message: err instanceof Error ? err.message : 'Polling failed',
+            message: err instanceof Error ? `Polling error: ${err.message}` : 'Polling failed',
           });
         }
       };
