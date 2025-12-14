@@ -1,11 +1,5 @@
 import { create } from 'zustand';
-
-export interface Job {
-  id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number;
-  result?: unknown;
-}
+import { Job } from './types';
 
 interface JobState {
   jobs: Record<string, Job>;

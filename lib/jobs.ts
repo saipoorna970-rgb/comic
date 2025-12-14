@@ -1,12 +1,4 @@
-export interface Job {
-  id: string;
-  type: 'translate' | 'comic';
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number;
-  data: unknown;
-  result?: unknown;
-  createdAt: Date;
-}
+import { Job } from './types';
 
 // Global in-memory store
 export const jobStore: Record<string, Job> = {};
