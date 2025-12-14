@@ -163,8 +163,8 @@ const analyzeDocument = async (filePath: string, mimeType: string) => {
     const buffer = await fs.promises.readFile(filePath);
     text = await extractTextFromPdf(buffer);
   } else if (mimeType.startsWith('image/')) {
-    // For images, we would normally use OCR, but for now we'll return a placeholder
-    text = 'Image text extraction would be implemented here using OCR services.';
+    // For images, text extraction via OCR is required
+    throw new Error('Image text extraction is not implemented. Please use PDF files for translation.');
   }
   
   // Detect language using franc
@@ -207,14 +207,8 @@ const analyzeDocument = async (filePath: string, mimeType: string) => {
 };
 
 const translateContent = async (text: string, sourceLanguage: string): Promise<{ translatedText: string }> => {
-  // Check if OpenAI client is available
+  // Always use OpenAI API - no fallbacks allowed
   const openai = getOpenAI();
-  if (!openai) {
-    console.warn('OpenAI client not available. Using original text as fallback.');
-    return {
-      translatedText: `[Translation service unavailable] ${text}`,
-    };
-  }
 
   // Chunk the text into smaller pieces for translation
   const chunks = chunkText(text, 3000); // 3000 character chunks
@@ -238,33 +232,28 @@ ${chunk}
 
 Please provide only the Telugu translation:`;
     
-    try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional translator specializing in high-quality translations that preserve meaning, tone, and cultural context.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-      });
-      
-      const translatedChunk = completion.choices[0]?.message?.content?.trim() || chunk;
-      translatedChunks.push(translatedChunk);
-      
-      // Update progress for partial completion would happen here
-      // Note: Progress updates happen in the calling function
-      
-    } catch (error) {
-      console.error(`Translation failed for chunk ${i + 1}:`, error);
-      translatedChunks.push(chunk); // Fallback to original text
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional translator specializing in high-quality translations that preserve meaning, tone, and cultural context.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      max_tokens: 2000,
+      temperature: 0.3,
+    });
+    
+    const translatedChunk = completion.choices[0]?.message?.content?.trim();
+    if (!translatedChunk) {
+      throw new Error(`Translation failed for chunk ${i + 1}: No content returned from OpenAI`);
     }
+    
+    translatedChunks.push(translatedChunk);
   }
   
   return {

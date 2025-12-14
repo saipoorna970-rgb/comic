@@ -58,7 +58,6 @@ export interface ComicJobResult {
   panels?: ComicPanelResult[];
 
   error?: string;
-  warnings?: string[];
 }
 
 export interface Job {

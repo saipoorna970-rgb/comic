@@ -23,11 +23,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    // Validate file type - PDF only (no image support yet)
+    const allowedTypes = ['application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Unsupported file type. Please upload PDF, JPEG, PNG, GIF, or WebP images.' },
+        { error: 'Unsupported file type. Please upload PDF files only.' },
         { status: 400 }
       );
     }
