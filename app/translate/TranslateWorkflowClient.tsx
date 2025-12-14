@@ -81,10 +81,62 @@ export function TranslateWorkflowClient() {
       body.append('file', file);
 
       const res = await fetch('/api/translate', { method: 'POST', body });
-      const json = (await res.json()) as any;
 
+      // Log response for debugging
+      console.log('Upload response status:', res.status);
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
+
+      // Check if response is OK before parsing JSON
       if (!res.ok) {
-        setSubmitError(json?.error || json?.details || 'Upload failed');
+        let errorMessage = 'Upload failed';
+        let errorDetails = '';
+
+        try {
+          const contentType = res.headers.get('content-type');
+          console.log('Content-Type:', contentType);
+
+          if (contentType && contentType.includes('application/json')) {
+            const json = (await res.json()) as any;
+            console.log('Error response JSON:', json);
+            errorMessage = json?.error || errorMessage;
+            errorDetails = json?.details || '';
+          } else {
+            const text = await res.text();
+            console.log('Error response text:', text);
+            errorMessage = `Server error (${res.status}): ${text}`;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorMessage = `Server error (${res.status}): Failed to parse response`;
+        }
+
+        setSubmitError(errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage);
+        setSubmitting(false);
+        return;
+      }
+
+      // Parse successful response
+      let json: any;
+      try {
+        const contentType = res.headers.get('content-type');
+        console.log('Success Content-Type:', contentType);
+
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Response is not JSON');
+        }
+
+        json = await res.json();
+        console.log('Success response JSON:', json);
+      } catch (parseError) {
+        console.error('Failed to parse success response:', parseError);
+        setSubmitError('Invalid response format from server');
+        setSubmitting(false);
+        return;
+      }
+
+      // Validate response structure
+      if (!json.jobId) {
+        setSubmitError('Invalid response: missing jobId');
         setSubmitting(false);
         return;
       }
@@ -94,7 +146,18 @@ export function TranslateWorkflowClient() {
       setSubmitting(false);
       router.replace(`/translate?job=${encodeURIComponent(newJobId)}`);
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Upload failed');
+      console.error('Upload failed:', e);
+      let errorMessage = 'Network error: ';
+      
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        errorMessage += 'Failed to connect to server. Please check your internet connection.';
+      } else if (e instanceof Error) {
+        errorMessage += e.message;
+      } else {
+        errorMessage += 'Unknown error occurred';
+      }
+
+      setSubmitError(errorMessage);
       setSubmitting(false);
     }
   };

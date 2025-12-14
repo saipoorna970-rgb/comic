@@ -33,16 +33,36 @@ const countWords = (text: string) => {
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (error) {
+      console.error('Form data parsing failed:', error);
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Failed to parse upload data', 
+          details: error instanceof Error ? error.message : 'Invalid form data' 
+        },
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
     const styleRaw = formData.get('visualStyle');
     const visualStyle = (typeof styleRaw === 'string' ? styleRaw : 'manga') as ComicVisualStyle;
     if (!ALLOWED_STYLES.includes(visualStyle)) {
       return NextResponse.json(
         {
+          success: false,
           error: `Invalid visualStyle. Allowed: ${ALLOWED_STYLES.join(', ')}`,
         },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -50,8 +70,8 @@ export async function POST(request: NextRequest) {
     const panelCount = panelCountRaw ?? 6;
     if (panelCount < 4 || panelCount > 8) {
       return NextResponse.json(
-        { error: 'panelCount must be between 4 and 8.' },
-        { status: 400 }
+        { success: false, error: 'panelCount must be between 4 and 8.' },
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -59,8 +79,8 @@ export async function POST(request: NextRequest) {
     const panelsPerPage = (panelsPerPageRaw ?? 4) as ComicJobData['panelsPerPage'];
     if (![2, 4, 6].includes(panelsPerPage)) {
       return NextResponse.json(
-        { error: 'panelsPerPage must be one of: 2, 4, 6.' },
-        { status: 400 }
+        { success: false, error: 'panelsPerPage must be one of: 2, 4, 6.' },
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -70,11 +90,26 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!file && !storyText.trim()) {
-      return NextResponse.json({ error: 'Provide either text or a PDF file.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Provide either text or a PDF file.' }, 
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    if (file && file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File too large. Max 100MB.' }, { status: 400 });
+    if (file) {
+      if (file.size === 0) {
+        return NextResponse.json(
+          { success: false, error: 'File is empty' }, 
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { success: false, error: 'File too large. Max 100MB.' }, 
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Determine input type and validate word count for text inputs early.
@@ -83,7 +118,10 @@ export async function POST(request: NextRequest) {
     if (storyText.trim()) {
       const wc = countWords(storyText);
       if (wc > MAX_WORDS) {
-        return NextResponse.json({ error: `Text too long. Max ${MAX_WORDS} words.` }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: `Text too long. Max ${MAX_WORDS} words.` }, 
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
       }
 
       data = {
@@ -98,32 +136,63 @@ export async function POST(request: NextRequest) {
     } else {
       // File-based input
       if (!file) {
-        return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: 'No file uploaded' }, 
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
       }
 
       const allowedTypes = ['application/pdf', 'text/plain'];
       if (!allowedTypes.includes(file.type)) {
         return NextResponse.json(
-          { error: 'Unsupported file type. Please upload a PDF or provide text.' },
-          { status: 400 }
+          { success: false, error: 'Unsupported file type. Please upload a PDF or provide text.' },
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
 
       const uploadDir = path.join(process.cwd(), 'tmp', 'uploads');
       await fs.promises.mkdir(uploadDir, { recursive: true });
 
-      const bytes = await file.arrayBuffer();
+      let bytes: ArrayBuffer;
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('File upload timeout')), 30000);
+        });
+        
+        const uploadPromise = file.arrayBuffer();
+        bytes = await Promise.race([uploadPromise, timeoutPromise]);
+      } catch (error) {
+        console.error('File reading failed:', error);
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'Failed to read uploaded file', 
+            details: error instanceof Error ? error.message : 'File upload timeout' 
+          },
+          { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
       const buffer = Buffer.from(bytes);
 
       if (buffer.length > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: 'File too large. Max 100MB.' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: 'File too large. Max 100MB.' }, 
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
       }
 
       if (file.type === 'text/plain') {
         const txt = buffer.toString('utf-8');
         const wc = countWords(txt);
         if (wc > MAX_WORDS) {
-          return NextResponse.json({ error: `Text too long. Max ${MAX_WORDS} words.` }, { status: 400 });
+          return NextResponse.json(
+            { success: false, error: `Text too long. Max ${MAX_WORDS} words.` }, 
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
         }
 
         data = {
@@ -148,8 +217,8 @@ export async function POST(request: NextRequest) {
           if (wc > MAX_WORDS) {
             await fs.promises.unlink(filePath);
             return NextResponse.json(
-              { error: `PDF text too long. Max ${MAX_WORDS} words.` },
-              { status: 400 }
+              { success: false, error: `PDF text too long. Max ${MAX_WORDS} words.` },
+              { status: 400, headers: { 'Content-Type': 'application/json' } }
             );
           }
         } catch (err) {
@@ -171,7 +240,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const job = createJob('comic', data);
+    let job;
+    try {
+      job = createJob('comic', data);
+    } catch (error) {
+      console.error('Job creation failed:', error);
+      // Clean up file if job creation fails
+      const filePath = (data as ComicJobData).filePath;
+      if (filePath) {
+        try {
+          await fs.promises.unlink(filePath);
+        } catch (cleanupError) {
+          console.error('Failed to clean up file after job creation failure:', cleanupError);
+        }
+      }
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Failed to create comic job', 
+          details: error instanceof Error ? error.message : 'Job creation error' 
+        },
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
     processComicJob(job.id).catch(async (error) => {
       console.error('Comic job failed:', error);
@@ -193,16 +287,26 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      success: true,
       jobId: job.id,
       status: job.status,
       progress: job.progress,
       message: 'Comic job created. Processing started.',
+    }, {
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Comic upload failed:', error);
     return NextResponse.json(
-      { error: 'Upload failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { 
+        success: false,
+        error: 'Upload failed', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }
@@ -212,6 +316,9 @@ export async function GET() {
     {
       message: 'Comic API. Use POST with form-data: {text|file} and options (visualStyle, panelCount, panelsPerPage).',
     },
-    { status: 200 }
+    { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    }
   );
 }

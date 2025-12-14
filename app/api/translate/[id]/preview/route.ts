@@ -15,14 +15,20 @@ export async function GET(
     if (!job) {
       return NextResponse.json(
         { error: 'Job not found' },
-        { status: 404 }
+        { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
 
     if (job.status !== 'completed') {
       return NextResponse.json(
         { error: 'Job not completed yet' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -34,7 +40,10 @@ export async function GET(
     if (!fs.existsSync(pdfPath)) {
       return NextResponse.json(
         { error: 'Generated PDF not found' },
-        { status: 404 }
+        { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -53,8 +62,14 @@ export async function GET(
   } catch (error) {
     console.error('Preview failed:', error);
     return NextResponse.json(
-      { error: 'Preview failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { 
+        error: 'Preview failed', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }

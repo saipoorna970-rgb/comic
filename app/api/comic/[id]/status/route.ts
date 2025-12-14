@@ -11,7 +11,13 @@ export async function GET(
     const job = getJob(params.id);
 
     if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Job not found' }, 
+        { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const acceptHeader = request.headers.get('accept');
@@ -30,12 +36,20 @@ export async function GET(
       createdAt: job.createdAt,
       data: job.data,
       result: job.result,
+    }, {
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Comic status check failed:', error);
     return NextResponse.json(
-      { error: 'Status check failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { 
+        error: 'Status check failed', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }
