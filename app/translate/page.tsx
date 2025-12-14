@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { TranslateWorkflowClient } from './TranslateWorkflowClient';
 
 export const metadata: Metadata = {
@@ -27,7 +28,9 @@ export default function TranslatePage() {
           </div>
         </header>
 
-        <TranslateWorkflowClient />
+        <Suspense fallback={<div>Loading translation tool...</div>}>
+          <TranslateWorkflowClient />
+        </Suspense>
       </div>
     </main>
   );

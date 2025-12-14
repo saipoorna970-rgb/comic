@@ -127,7 +127,7 @@ export function ComicWorkflowClient() {
           console.log('Content-Type:', contentType);
 
           if (contentType && contentType.includes('application/json')) {
-            const json = (await res.json()) as any;
+            const json = (await res.json()) as { error?: string; details?: string };
             console.log('Error response JSON:', json);
             errorMessage = json?.error || errorMessage;
             errorDetails = json?.details || '';
@@ -147,7 +147,7 @@ export function ComicWorkflowClient() {
       }
 
       // Parse successful response
-      let json: any;
+      let json: { jobId?: unknown };
       try {
         const contentType = res.headers.get('content-type');
         console.log('Success Content-Type:', contentType);
@@ -367,17 +367,6 @@ export function ComicWorkflowClient() {
             Submit a story to see progress, panel previews, and the generated PDF.
           </div>
         )}
-
-        {result?.warnings?.length ? (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            <div className="font-semibold">Warnings</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {result.warnings.map((w, i) => (
-                <li key={`${w}-${i}`}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
 
         {result?.panels?.length ? (
           <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">

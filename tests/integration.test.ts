@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import FormData from 'form-data';
 
 // Test configuration
@@ -22,9 +23,9 @@ describe('Translation API Integration', () => {
 
   afterAll(async () => {
     // Clean up test files and server
-    const testDirs = ['tmp/uploads', 'tmp/outputs', 'tmp/test'];
+    const testDirs = ['uploads', 'outputs', 'test'];
     for (const dir of testDirs) {
-      const dirPath = path.join(process.cwd(), dir);
+      const dirPath = path.join(os.tmpdir(), dir);
       if (fs.existsSync(dirPath)) {
         fs.rmSync(dirPath, { recursive: true, force: true });
       }
@@ -217,7 +218,7 @@ describe('Translation API Integration', () => {
 
     it('should clean up temporary files on errors', async () => {
       // Test that temporary files are cleaned up when jobs fail
-      const testDir = path.join(process.cwd(), 'tmp', 'test');
+      const testDir = path.join(os.tmpdir(), 'test');
       await fs.promises.mkdir(testDir, { recursive: true });
       
       // Create a test file
