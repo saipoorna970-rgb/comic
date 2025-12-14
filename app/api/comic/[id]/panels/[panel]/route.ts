@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { getJob } from '@/lib/jobs';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid panel index' }, { status: 400 });
     }
 
-    const comicDir = path.join(process.cwd(), 'tmp', 'comic', params.id, 'panels');
+    const comicDir = path.join(os.tmpdir(), 'comic', params.id, 'panels');
     const filename = `panel-${String(panelIndex).padStart(3, '0')}.png`;
     const imagePath = path.join(comicDir, filename);
 

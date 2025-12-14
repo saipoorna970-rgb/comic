@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getJob } from '@/lib/jobs';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { TranslationJobResult } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,7 @@ export async function GET(
     }
 
     // Construct the PDF file path
-    const outputDir = path.join(process.cwd(), 'tmp', 'outputs');
+    const outputDir = path.join(os.tmpdir(), 'outputs');
     const pdfPath = path.join(outputDir, `${params.id}-translated.pdf`);
 
     // Check if file exists

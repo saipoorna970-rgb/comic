@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { TranslationJobData, TranslationJobResult, Job } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 // Timeout configuration
 const TRANSLATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
@@ -268,7 +269,7 @@ const generateTranslatedPdf = async (
   translatedText: string,
   jobId: string
 ) => {
-  const outputDir = path.join(process.cwd(), 'tmp', 'outputs');
+  const outputDir = path.join(os.tmpdir(), 'outputs');
   await fs.promises.mkdir(outputDir, { recursive: true });
   
   const outputPath = path.join(outputDir, `${jobId}-translated.pdf`);

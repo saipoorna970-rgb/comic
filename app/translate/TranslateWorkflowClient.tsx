@@ -96,7 +96,7 @@ export function TranslateWorkflowClient() {
           console.log('Content-Type:', contentType);
 
           if (contentType && contentType.includes('application/json')) {
-            const json = (await res.json()) as any;
+            const json = (await res.json()) as { error?: string; details?: string };
             console.log('Error response JSON:', json);
             errorMessage = json?.error || errorMessage;
             errorDetails = json?.details || '';
@@ -116,7 +116,7 @@ export function TranslateWorkflowClient() {
       }
 
       // Parse successful response
-      let json: any;
+      let json: { jobId?: unknown };
       try {
         const contentType = res.headers.get('content-type');
         console.log('Success Content-Type:', contentType);

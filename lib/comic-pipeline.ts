@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import sharp from 'sharp';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getOpenAI, getReplicate } from './ai';
@@ -21,6 +22,12 @@ type Scene = {
   visual: string;
   dialogue_telugu: string;
 };
+
+interface SceneJSON {
+  title?: string;
+  visual: string;
+  dialogue_telugu: string;
+}
 
 export const processComicJob = async (jobId: string): Promise<void> => {
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -50,9 +57,9 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
 
   const data = job.data as ComicJobData;
 
-  const comicDir = path.join(process.cwd(), 'tmp', 'comic', jobId);
+  const comicDir = path.join(os.tmpdir(), 'comic', jobId);
   const panelsDir = path.join(comicDir, 'panels');
-  const outputDir = path.join(process.cwd(), 'tmp', 'outputs');
+  const outputDir = path.join(os.tmpdir(), 'outputs');
 
   await fs.promises.mkdir(panelsDir, { recursive: true });
   await fs.promises.mkdir(outputDir, { recursive: true });
@@ -335,16 +342,19 @@ ${opts.storyText}`;
     throw new Error('OpenAI returned empty content for script generation');
   }
   
-  const parsed = parseJsonFromModel(content);
+  const parsed = parseJsonFromModel(content) as { scenes?: unknown[] } | null;
 
   if (!parsed || !Array.isArray(parsed.scenes)) {
     throw new Error('Failed to parse JSON from OpenAI response for script generation');
   }
 
   const scenes = parsed.scenes
-    .filter((s: any) => typeof s?.visual === 'string' && typeof s?.dialogue_telugu === 'string')
+    .filter((s: unknown): s is SceneJSON => {
+      const scene = s as SceneJSON;
+      return typeof scene?.visual === 'string' && typeof scene?.dialogue_telugu === 'string';
+    })
     .slice(0, opts.panelCount)
-    .map((s: any) => ({
+    .map((s) => ({
       title: typeof s.title === 'string' ? s.title : undefined,
       visual: s.visual.trim(),
       dialogue_telugu: s.dialogue_telugu.trim(),
@@ -357,7 +367,7 @@ ${opts.storyText}`;
   return { scenes };
 };
 
-const parseJsonFromModel = (text: string): any | null => {
+const parseJsonFromModel = (text: string): unknown => {
   const cleaned = text
     .replace(/^```json\s*/i, '')
     .replace(/^```\s*/i, '')
@@ -415,7 +425,7 @@ const generatePanelImage = async (opts: {
           output_quality: 90,
           num_outputs: 1,
         },
-      }) as Promise<any>,
+      }) as Promise<unknown>,
     { retries: 2, baseDelayMs: 1200 }
   );
 
@@ -440,12 +450,13 @@ const generatePanelImage = async (opts: {
   return { finalImagePath, replicateUrl };
 };
 
-const normalizeReplicateOutputUrl = (output: any): string | undefined => {
+const normalizeReplicateOutputUrl = (output: unknown): string | undefined => {
   if (!output) return undefined;
   if (typeof output === 'string') return output;
   if (Array.isArray(output) && typeof output[0] === 'string') return output[0];
-  if (typeof output?.url === 'string') return output.url;
-  if (Array.isArray(output?.output) && typeof output.output[0] === 'string') return output.output[0];
+  const outObj = output as Record<string, unknown>;
+  if (typeof outObj.url === 'string') return outObj.url;
+  if (Array.isArray(outObj.output) && typeof outObj.output[0] === 'string') return outObj.output[0];
   return undefined;
 };
 

@@ -96,7 +96,7 @@ export function ProgressTracker({
         pushLog({ at: nowIso(), level: 'info', message: summary });
       }
 
-      const error = (s.result as any)?.error;
+      const error = s.result?.error;
       if (s.status === 'failed' && typeof error === 'string') {
         pushLog({ at: nowIso(), level: 'error', message: `Failed: ${error}` });
       }
@@ -203,7 +203,7 @@ export function ProgressTracker({
 
     es.addEventListener('status', onSseStatus);
     es.addEventListener('complete', onSseComplete);
-    es.addEventListener('error', onSseErrorEvent as any);
+    es.addEventListener('error', onSseErrorEvent as unknown as EventListener);
 
     const fallbackTimer = window.setTimeout(() => {
       if (!statusRef.current) {
@@ -241,7 +241,7 @@ export function ProgressTracker({
     return getStageIndex(type, status);
   }, [status, type]);
 
-  const errorMessage = (status?.result as any)?.error;
+  const errorMessage = status?.result?.error;
 
   return (
     <div className="space-y-4">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getJob } from '@/lib/jobs';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'Job not completed yet' }, { status: 400 });
     }
 
-    const outputDir = path.join(process.cwd(), 'tmp', 'outputs');
+    const outputDir = path.join(os.tmpdir(), 'outputs');
     const pdfPath = path.join(outputDir, `${params.id}-comic.pdf`);
 
     if (!fs.existsSync(pdfPath)) {

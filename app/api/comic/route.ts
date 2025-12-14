@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { createJob, updateJob } from '@/lib/jobs';
 import { processComicJob } from '@/lib/comic-pipeline';
 import { extractTextFromPdf } from '@/lib/pdf';
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const uploadDir = path.join(process.cwd(), 'tmp', 'uploads');
+      const uploadDir = path.join(os.tmpdir(), 'uploads');
       await fs.promises.mkdir(uploadDir, { recursive: true });
 
       let bytes: ArrayBuffer;

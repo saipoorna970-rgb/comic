@@ -3,13 +3,14 @@ import { createJob, updateJob } from '@/lib/jobs';
 import { processTranslationJob } from '@/lib/translation-pipeline';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     // Create upload directory
-    const uploadDir = path.join(process.cwd(), 'tmp', 'uploads');
+    const uploadDir = path.join(os.tmpdir(), 'uploads');
     await fs.promises.mkdir(uploadDir, { recursive: true });
 
     // Parse form data using built-in Next.js formData()

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { ComicWorkflowClient } from './ComicWorkflowClient';
 
 export const metadata: Metadata = {
@@ -28,7 +29,9 @@ export default function ComicPage() {
           </div>
         </header>
 
-        <ComicWorkflowClient />
+        <Suspense fallback={<div>Loading comic generator...</div>}>
+          <ComicWorkflowClient />
+        </Suspense>
       </div>
     </main>
   );

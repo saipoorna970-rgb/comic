@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import Replicate from 'replicate';
 
-// Validation at module load to fail fast
+// Validation helper
 const validateApiKeys = () => {
   const missingKeys: string[] = [];
   
@@ -18,19 +18,11 @@ const validateApiKeys = () => {
   }
 };
 
-// Validate API keys immediately when module is loaded
-try {
-  validateApiKeys();
-} catch (error) {
-  console.error('API Key Validation Failed:', error);
-  // Re-throw to prevent application startup
-  throw error;
-}
-
 let openaiInstance: OpenAI | null = null;
 let replicateInstance: Replicate | null = null;
 
 export const getOpenAI = (): OpenAI => {
+  validateApiKeys();
   if (!openaiInstance) {
     openaiInstance = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY!,
@@ -40,6 +32,7 @@ export const getOpenAI = (): OpenAI => {
 };
 
 export const getReplicate = (): Replicate => {
+  validateApiKeys();
   if (!replicateInstance) {
     replicateInstance = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN!,
