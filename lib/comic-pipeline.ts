@@ -74,9 +74,7 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
   });
 
   updateJob(jobId, { progress: 20, stage: 'analyzing-story' });
-  const { summary, warnings: analyzeWarnings } = await analyzeStory(cleanedText, data.panelCount);
-
-  const warnings: string[] = [...(analyzeWarnings ?? [])];
+  const { summary } = await analyzeStory(cleanedText, data.panelCount);
 
   updateJob(jobId, {
     progress: 30,
@@ -84,18 +82,15 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
     result: {
       summary,
       panels: [],
-      warnings: warnings.length ? warnings : undefined,
     } satisfies ComicJobResult,
   });
 
-  const { scenes, warnings: scriptWarnings } = await generateScript({
+  const { scenes } = await generateScript({
     storyText: cleanedText,
     summary,
     visualStyle: data.visualStyle,
     panelCount: data.panelCount,
   });
-
-  warnings.push(...(scriptWarnings ?? []));
 
   // Draw panels
   updateJob(jobId, { progress: 40, stage: 'drawing-panels' });
@@ -115,15 +110,12 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
     const {
       finalImagePath,
       replicateUrl,
-      warnings: panelWarnings,
     } = await generatePanelImage({
       index: i,
       panelsDir,
       imagePrompt,
       dialogueTelugu: scene.dialogue_telugu,
     });
-
-    warnings.push(...(panelWarnings ?? []));
 
     const panelResult: ComicPanelResult = {
       index: i,
@@ -141,7 +133,6 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
       result: {
         summary,
         panels,
-        warnings: warnings.length ? warnings : undefined,
       } satisfies ComicJobResult,
     });
 
@@ -178,7 +169,6 @@ const processComicJobInternal = async (jobId: string): Promise<void> => {
       downloadUrl: `/api/comic/${jobId}/download`,
       summary,
       panels,
-      warnings: warnings.length ? warnings : undefined,
     } satisfies ComicJobResult,
   });
 
@@ -252,14 +242,8 @@ const withRetry = async <T>(
 const analyzeStory = async (
   storyText: string,
   panelCount: number
-): Promise<{ summary: string; warnings?: string[] }> => {
+): Promise<{ summary: string }> => {
   const openai = getOpenAI();
-  if (!openai) {
-    return {
-      summary: storyText.slice(0, 1500),
-      warnings: ['OpenAI not configured; using truncated story as summary.'],
-    };
-  }
 
   const prompt = `Analyze the following story and extract the key story beats.
 
@@ -292,9 +276,12 @@ Return plain text summary (no markdown).`;
   );
 
   const summary = completion.choices[0]?.message?.content?.trim();
+  if (!summary) {
+    throw new Error('OpenAI returned empty summary for story analysis');
+  }
+  
   return {
-    summary: summary || storyText.slice(0, 1500),
-    warnings: summary ? undefined : ['OpenAI returned empty summary; using fallback.'],
+    summary,
   };
 };
 
@@ -305,12 +292,6 @@ const generateScript = async (opts: {
   panelCount: number;
 }): Promise<{ scenes: Scene[]; warnings?: string[] }> => {
   const openai = getOpenAI();
-  if (!openai) {
-    return {
-      scenes: fallbackScenes(opts.panelCount, opts.summary),
-      warnings: ['OpenAI not configured; using fallback script.'],
-    };
-  }
 
   const prompt = `Create a comic script from this story.
 
@@ -349,14 +330,15 @@ ${opts.storyText}`;
     { retries: 2, baseDelayMs: 1000 }
   );
 
-  const content = completion.choices[0]?.message?.content?.trim() || '';
+  const content = completion.choices[0]?.message?.content?.trim();
+  if (!content) {
+    throw new Error('OpenAI returned empty content for script generation');
+  }
+  
   const parsed = parseJsonFromModel(content);
 
   if (!parsed || !Array.isArray(parsed.scenes)) {
-    return {
-      scenes: fallbackScenes(opts.panelCount, opts.summary),
-      warnings: ['Failed to parse model JSON; using fallback script.'],
-    };
+    throw new Error('Failed to parse JSON from OpenAI response for script generation');
   }
 
   const scenes = parsed.scenes
@@ -369,10 +351,7 @@ ${opts.storyText}`;
     }));
 
   if (scenes.length !== opts.panelCount) {
-    return {
-      scenes: padScenes(scenes, opts.panelCount, opts.summary),
-      warnings: ['Model returned unexpected scene count; adjusted to requested panelCount.'],
-    };
+    throw new Error(`OpenAI returned ${scenes.length} scenes instead of requested ${opts.panelCount} scenes`);
   }
 
   return { scenes };
@@ -394,27 +373,6 @@ const parseJsonFromModel = (text: string): any | null => {
   } catch {
     return null;
   }
-};
-
-const fallbackScenes = (panelCount: number, summary: string): Scene[] => {
-  const baseVisual = summary || 'A dramatic moment in the story.';
-  return Array.from({ length: panelCount }).map((_, i) => ({
-    title: `Scene ${i + 1}`,
-    visual: baseVisual,
-    dialogue_telugu: 'ఇది ఎలా జరిగింది? మనం ముందుకు సాగాలి.',
-  }));
-};
-
-const padScenes = (scenes: Scene[], panelCount: number, summary: string): Scene[] => {
-  const output = scenes.slice(0, panelCount);
-  while (output.length < panelCount) {
-    output.push({
-      title: `Scene ${output.length + 1}`,
-      visual: summary || 'A continuation of the story.',
-      dialogue_telugu: 'సరే, మనం ముందుకు వెళ్దాం.',
-    });
-  }
-  return output;
 };
 
 const buildImagePrompt = (sceneVisual: string, style: ComicVisualStyle): string => {
@@ -439,48 +397,34 @@ const generatePanelImage = async (opts: {
   panelsDir: string;
   imagePrompt: string;
   dialogueTelugu: string;
-}): Promise<{ finalImagePath: string; replicateUrl?: string; warnings?: string[] }> => {
-  const warnings: string[] = [];
+}): Promise<{ finalImagePath: string; replicateUrl: string }> => {
   const replicate = getReplicate();
 
   const baseName = `panel-${String(opts.index).padStart(3, '0')}`;
   const rawImagePath = path.join(opts.panelsDir, `${baseName}.raw.png`);
   const finalImagePath = path.join(opts.panelsDir, `${baseName}.png`);
 
-  let replicateUrl: string | undefined;
+  // Always use Replicate FLUX.1 Schnell - no fallbacks allowed
+  const output = await withRetry(
+    () =>
+      replicate.run('black-forest-labs/flux-schnell', {
+        input: {
+          prompt: opts.imagePrompt,
+          aspect_ratio: '16:9',
+          output_format: 'png',
+          output_quality: 90,
+          num_outputs: 1,
+        },
+      }) as Promise<any>,
+    { retries: 2, baseDelayMs: 1200 }
+  );
 
-  let imageBuffer: Buffer;
-  if (!replicate) {
-    warnings.push('Replicate not configured; using placeholder images.');
-    imageBuffer = await createPlaceholderPanel(opts.imagePrompt, opts.dialogueTelugu);
-  } else {
-    try {
-      const output = await withRetry(
-        () =>
-          replicate.run('black-forest-labs/flux-schnell', {
-            input: {
-              prompt: opts.imagePrompt,
-              aspect_ratio: '16:9',
-              output_format: 'png',
-              output_quality: 90,
-              num_outputs: 1,
-            },
-          }) as Promise<any>,
-        { retries: 2, baseDelayMs: 1200 }
-      );
-
-      replicateUrl = normalizeReplicateOutputUrl(output);
-      if (!replicateUrl) {
-        throw new Error('Replicate returned no image URL');
-      }
-
-      imageBuffer = await downloadToBuffer(replicateUrl);
-    } catch (error) {
-      console.error('Replicate generation failed:', error);
-      warnings.push('Replicate generation failed; using placeholder image.');
-      imageBuffer = await createPlaceholderPanel(opts.imagePrompt, opts.dialogueTelugu);
-    }
+  const replicateUrl = normalizeReplicateOutputUrl(output);
+  if (!replicateUrl) {
+    throw new Error('Replicate returned no image URL');
   }
+
+  const imageBuffer = await downloadToBuffer(replicateUrl);
 
   // Normalize to 1280x720
   const resized = await sharp(imageBuffer)
@@ -493,7 +437,7 @@ const generatePanelImage = async (opts: {
   const withBubble = await overlaySpeechBubble(resized, opts.dialogueTelugu);
   await fs.promises.writeFile(finalImagePath, withBubble);
 
-  return { finalImagePath, replicateUrl, warnings: warnings.length ? warnings : undefined };
+  return { finalImagePath, replicateUrl };
 };
 
 const normalizeReplicateOutputUrl = (output: any): string | undefined => {
@@ -512,35 +456,6 @@ const downloadToBuffer = async (url: string): Promise<Buffer> => {
   }
   const ab = await res.arrayBuffer();
   return Buffer.from(ab);
-};
-
-const createPlaceholderPanel = async (prompt: string, dialogue: string): Promise<Buffer> => {
-  const width = 1280;
-  const height = 720;
-
-  const bg = await sharp({
-    create: {
-      width,
-      height,
-      channels: 3,
-      background: { r: 230, g: 230, b: 235 },
-    },
-  })
-    .png()
-    .toBuffer();
-
-  const safePrompt = prompt.slice(0, 120).replace(/[<>&]/g, '');
-  const safeDialogue = dialogue.slice(0, 80).replace(/[<>&]/g, '');
-
-  const svg = Buffer.from(`
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect x="0" y="0" width="${width}" height="${height}" fill="rgb(230,230,235)"/>
-  <text x="50" y="120" font-size="36" font-family="sans-serif" fill="rgb(30,30,30)">[Placeholder Panel]</text>
-  <text x="50" y="180" font-size="20" font-family="sans-serif" fill="rgb(60,60,60)">Prompt: ${safePrompt}</text>
-  <text x="50" y="220" font-size="22" font-family="sans-serif" fill="rgb(20,20,20)">Telugu: ${safeDialogue}</text>
-</svg>`);
-
-  return sharp(bg).composite([{ input: svg }]).png().toBuffer();
 };
 
 const overlaySpeechBubble = async (imageBuffer: Buffer, dialogueTelugu: string): Promise<Buffer> => {

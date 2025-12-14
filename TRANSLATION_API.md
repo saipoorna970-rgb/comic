@@ -2,6 +2,35 @@
 
 This document describes the translation pipeline API endpoints for handling PDF and image translation to Telugu.
 
+## ⚠️ IMPORTANT: Real API Dependencies
+
+This application requires **active API subscriptions** to external services:
+
+- **OpenAI GPT-4o** for translation (paid service)
+- **Replicate FLUX.1 Schnell** for image generation (paid service) 
+- **PDF-parse library** for actual PDF text extraction
+- **Franc library** for real language detection
+
+### Required API Keys
+
+⚠️ **The application will fail to start without these API keys:**
+
+- **OPENAI_API_KEY**: OpenAI API key for GPT-4o translation service
+  - Get from: https://platform.openai.com/api-keys
+  - Requires: Active OpenAI subscription with GPT-4o access
+  
+- **REPLICATE_API_TOKEN**: Replicate API token for FLUX.1 Schnell image generation
+  - Get from: https://replicate.com/account/api-tokens
+  - Requires: Active Replicate account with sufficient credits
+
+### API Key Validation
+
+The application performs strict validation at startup:
+- Missing API keys will cause immediate startup failure
+- No fallback or mock behavior is available
+- All translations use real GPT-4o processing
+- All images use real FLUX.1 Schnell generation
+
 ## Overview
 
 The translation pipeline provides endpoints to upload documents, monitor translation progress, and download translated results. The system supports PDF files and images (JPEG, PNG, GIF, WebP) up to 100MB in size.
