@@ -1,55 +1,82 @@
-import { PDFDocument } from 'pdf-lib';
-import { spawn } from 'child_process';
+// DOMMatrix polyfill for Node.js environment - MUST be at the very top
+// before any other imports that might eventually pull in pdfjs-dist
+if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+  (globalThis as any).DOMMatrix = class DOMMatrix {
+    a: number; b: number; c: number; d: number; e: number; f: number;
+    constructor() {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1;
+      this.e = 0; this.f = 0;
+    }
+    
+    translate(x: number, y: number) {
+      this.e += x;
+      this.f += y;
+      return this;
+    }
+    
+    rotate(angle: number) {
+      const cos = Math.cos(angle * Math.PI / 180);
+      const sin = Math.sin(angle * Math.PI / 180);
+      const a = this.a * cos + this.c * sin;
+      const b = this.b * cos + this.d * sin;
+      const c = this.c * cos - this.a * sin;
+      const d = this.d * cos - this.b * sin;
+      this.a = a; this.b = b; this.c = c; this.d = d;
+      return this;
+    }
+    
+    scale(scaleX: number, scaleY?: number) {
+      const sY = scaleY || scaleX;
+      this.a *= scaleX;
+      this.b *= scaleX;
+      this.c *= sY;
+      this.d *= sY;
+      return this;
+    }
+  };
+}
 
+import { PDFDocument } from 'pdf-lib';
+
+/**
+ * Extracts text from a PDF buffer using pdf-parse.
+ * This implementation includes a DOMMatrix polyfill and uses dynamic imports
+ * to ensure compatibility with Node.js environments and avoid bundling issues.
+ */
 export const extractTextFromPdf = async (buffer: Buffer): Promise<string> => {
   try {
-    return new Promise((resolve, reject) => {
-      // Spawn a child process to handle PDF parsing
-      const worker = spawn('node', ['lib/pdf-worker.js'], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-      
-      // Send PDF buffer as base64 to worker
-      const base64Buffer = buffer.toString('base64');
-      worker.stdin.write(base64Buffer);
-      worker.stdin.end();
-      
-      // Handle worker output
-      let output = '';
-      worker.stdout.on('data', (chunk) => {
-        output += chunk.toString();
-      });
-      
-      worker.on('close', (code) => {
-        try {
-          if (code === 0) {
-            const result = JSON.parse(output);
-            if (result.success) {
-              resolve(result.text);
-            } else {
-              reject(new Error(result.error));
-            }
-          } else {
-            reject(new Error(`PDF worker process exited with code ${code}`));
-          }
-        } catch (error) {
-          reject(new Error(`Failed to parse worker output: ${error}`));
+    // Dynamic import to ensure the polyfill is already in place
+    // and to help with compatibility in different environments
+    const pdfModule = await import('pdf-parse');
+    const pdfAny = pdfModule as any;
+    
+    // Handle different export patterns (CommonJS vs ESM)
+    // pdf-parse is traditionally a CommonJS module
+    const defaultExport = pdfAny.default || pdfAny;
+    
+    // Support for the interface seen in pdf-worker.js
+    const PDFParse = pdfAny.PDFParse || (pdfAny.default && pdfAny.default.PDFParse);
+    if (PDFParse && typeof PDFParse === 'function') {
+      try {
+        const parser = new (PDFParse as any)({ data: buffer });
+        if (typeof parser.getText === 'function') {
+          const data = await parser.getText();
+          return data.text;
         }
-      });
-      
-      // Handle worker errors
-      worker.on('error', (error) => {
-        reject(new Error(`PDF worker error: ${error.message}`));
-      });
-      
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        worker.kill();
-        reject(new Error('PDF extraction timeout'));
-      }, 30000);
-    });
+      } catch (e) {
+        console.warn('Attempted PDFParse constructor usage failed, falling back to standard function:', e);
+      }
+    }
+
+    // Try standard usage
+    if (typeof defaultExport === 'function') {
+      const data = await defaultExport(buffer);
+      return data.text;
+    }
+
+    throw new Error('pdf-parse does not export a valid function or PDFParse class');
   } catch (error) {
-    console.error('PDF parsing failed:', error);
+    console.error('PDF parsing error:', error);
     throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
