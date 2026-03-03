@@ -574,6 +574,15 @@ const buildComicPdf = async (opts: {
     pageIndex++;
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
+    // Cinematic background for the entire page
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: pageWidth,
+      height: pageHeight,
+      color: rgb(0.08, 0.08, 0.08),
+    });
+
     const batch = panelPaths.slice(i, i + opts.panelsPerPage);
     for (let j = 0; j < batch.length; j++) {
       const col = j % columns;
@@ -593,15 +602,16 @@ const buildComicPdf = async (opts: {
       const dx = x + (cellWidth - drawWidth) / 2;
       const dy = y + (cellHeight - drawHeight) / 2;
 
+      // Cinematic dark background
       page.drawRectangle({
         x,
         y,
         width: cellWidth,
         height: cellHeight,
         borderWidth: 1,
-        borderColor: rgb(0, 0, 0),
-        color: rgb(1, 1, 1),
-        opacity: 0,
+        borderColor: rgb(0.15, 0.15, 0.15),
+        color: rgb(0.08, 0.08, 0.08),
+        opacity: 1,
       });
 
       page.drawImage(img, {
@@ -618,7 +628,7 @@ const buildComicPdf = async (opts: {
       y: 14,
       size: 10,
       font,
-      color: rgb(0.2, 0.2, 0.2),
+      color: rgb(0.7, 0.7, 0.7),
     });
   }
 
